@@ -1,5 +1,5 @@
-# AutomateTheCloud - AWS - S3 Bucket - Terraform Module
-Terraform module to create an S3 Bucket
+# AWS - S3 Bucket - Terraform Module
+Terraform module to create an S3 Bucket (AutomateTheCloud model)
 
 ***
 
