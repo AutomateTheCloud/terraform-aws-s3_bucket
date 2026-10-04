@@ -1,16 +1,19 @@
+# Copyright 2025 Automate the Cloud Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 resource "aws_s3_bucket" "this" {
   bucket = var.name
+  region = var.region
 
   force_destroy = var.force_destroy
 
   tags = merge(
     local.tags,
-    tomap({
-      "Name" = var.name,
-    }),
-    tomap(var.s3_bucket_additional_tags),
-    tomap(try(var.used_for_s3_logs, false) ? {"UsedForS3Logs" = "true"} : {})
+    { "Name" = var.name },
+    var.s3_bucket_additional_tags
   )
+
+  # These arguments are managed by their own aws_s3_bucket_* resources.
   lifecycle {
     ignore_changes = [
       lifecycle_rule,
@@ -19,7 +22,6 @@ resource "aws_s3_bucket" "this" {
     ]
   }
 
-  object_lock_enabled = try(var.object_lock.enabled, false) ? true : null
-
-  provider = aws.this
+  # Object Lock is turned on by aws_s3_bucket_object_lock_configuration, not here.
+  # Setting object_lock_enabled on this resource would replace the bucket when it changes.
 }

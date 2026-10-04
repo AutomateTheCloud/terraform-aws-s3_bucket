@@ -1,0 +1,7 @@
+# Trivy findings that are deliberate. Each entry says why.
+misconfigurations:
+  - id: AWS-0090
+    statement: >-
+      Versioning is opt-in. A versioned bucket keeps, and bills for, every
+      overwritten and deleted object, so the module does not turn it on
+      silently. The versioning input documents how to enable it.

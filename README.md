@@ -1,324 +1,513 @@
-# AWS - S3 Bucket - Terraform Module
-Terraform module to create an S3 Bucket (AutomateTheCloud model)
+# Terraform module for Amazon S3 buckets
 
-***
+Creates an Amazon Simple Storage Service (S3) bucket and its configuration: encryption, versioning, lifecycle rules, access logging, the bucket policy, and optional features such as static website hosting and Object Lock.
+
+The defaults are the settings most buckets should have. A bucket created with only the required inputs is private, rejects requests that are not made over HTTPS, encrypts every object, and has access control lists (ACLs) turned off.
+
+## What it configures
+
+| Setting | Default | Input |
+|---|---|---|
+| Public access | Blocked | `public_access_block`, `policy.public_read` |
+| ACLs | Off: the bucket owner owns every object | Not configurable |
+| Encryption | SSE-S3 (`AES256`) | `server_side_encryption` |
+| HTTPS-only access | On | `policy.require_encrypted_transport` |
+| Versioning | Suspended | `versioning` |
+| Lifecycle rules | None | `lifecycle_rules` |
+| Access logging | Off | `logging` |
+| Access for other accounts | None | `policy` |
+| Cross-Origin Resource Sharing (CORS) | None | `cors` |
+| Static website hosting | Off | `website` |
+| Object Lock | Off | `object_lock` |
+| Transfer Acceleration | Off | `enable_transfer_acceleration` |
+| Requester Pays | Off | `requester_pays` |
 
 ## Usage
+
 ```hcl
 module "s3_bucket" {
-  source    = "../"
-  providers = { aws.this = aws.us-east-1 }
+  source  = "AutomateTheCloud/s3_bucket/aws"
+  version = "~> 1.0"
 
   details = {
-    scope       = "Demo"
-    purpose     = "S3 Bucket"
-    environment = "prd"
-    additional_tags = {
-      "Project"   = "Project Name"
-      "ProjectID" = "123456789"
-      "Contact"   = "David Singer - david.singer@example.com"
-    }
+    scope       = "Automate the Cloud"
+    purpose     = "Course Materials"
+    environment = "Production"
   }
 
-  name          = "demo-bucket-123456789zz"
-  force_destroy = true
-  cors = [
-    {
-      allowed_headers = ["*"]
-      allowed_methods = ["PUT", "POST"]
-      allowed_origins = ["https://s3-website-test.hashicorp.com"]
-      expose_headers  = ["ETag"]
-      max_age_seconds = 3000
-    },
-    {
-      allowed_methods = ["GET"]
-      allowed_origins = ["*"]
-    }
-  ]
-  lifecycle_rules = [
-    {
-      rule_name                              = "Cleanup (Non-Current)"
-      enabled                                = true
-      abort_incomplete_multipart_upload_days = 7
-      noncurrent_version_expiration          = { days = 1 }
-      expiration                             = { expired_object_delete_marker = true }
-    },
-    {
-      rule_name                              = "Cleanup (Archive)"
-      enabled                                = true
-      prefix                                 = "archive/"
-      abort_incomplete_multipart_upload_days = 1
-      transition = [
-        {
-          days          = 2
-          storage_class = "GLACIER"
-        }
-      ]
-      expiration = { days = 420 }
-    },
-    {
-      rule_name                              = "Cleanup (Quarantine)"
-      enabled                                = true
-      prefix                                 = "quarantine/"
-      abort_incomplete_multipart_upload_days = 1
-      expiration                             = { days = 30 }
-    }
-  ]
-  logging = {
-    bucket = "logs-use1-012345678901"
-  }
-  policy = {
-    require_encrypted_transport = true
-    use_for_aws_account_logging = true
-    aws_account_read_access = [
-      "012345678901",
-      "987654321098"
-    ]
-    aws_account_write_access = []
-    aws_organization_read_access = [
-      "o-abcdefghi",
-    ]
-    aws_organization_write_access = []
-  }
-  public = {
-    enabled = false
-  }
-  public_access_block = {
-    block_public_acls       = false
-    block_public_policy     = false
-    ignore_public_acls      = false
-    restrict_public_buckets = false
-  }
-  website = {
-    enabled        = true
-    index_document = "index.html"
-  }
-  server_side_encryption = {
-    bucket_key_enabled = true
-    kms_enabled        = true
-    # kms_key_id = "alias/key_name"
-  }
-  versioning = {
-    enabled = true
-  }
+  name       = "example-course-materials"
+  versioning = { enabled = true }
 }
 ```
 
-***
+`details` and `name` are the only required inputs. `details` sets the `Scope`, `Purpose` and `Environment` tags on every resource.
 
-## Inputs
-| Name | Description | Type | Default |
-|------|-------------|:----:|:-------:|
-| `cors` | Cross Origin Resource Sharing [CORS](#input-cors) | `any` | |
-| `enable_object_lock` | Enable Object Lock | `bool` | `false` |
-| `enable_transfer_acceleration` | Enable S3 Transfer Acceleration | `bool` | `false` |
-| `force_destroy` | S3 Bucket Force destroy flag for behavior during `terraform destroy` | `bool` | `false` |
-| `lifecycle_rule` | [Lifecycle rules](#input-lifecycle-rules) |
-| `logging` | [Logging](#input-logging) | `any` | |
-| `name` | The name of the bucket | `string` | |
-| `object_lock` | [Object Lock](#input-object-lock) | `any` | |
-| `policy` | [Policy](#input-policy) | `any` | |
-| `public` | [Public Settings](#input-public-settings) | `any` | |
-| `public_access_block` | [Public Access Block](#input-public-access-block) | `any` | |
-| `requester_pays` | Requester Pays | `bool` | `false` |
-| `s3_bucket_additional_tags` | S3Bucket - Additional Tags | `map` | `{}` |
-| `server_side_encryption` | [Server-Side Encryption](#input-server-side-encryption) | `any` | |
-| `versioning` | [Versioning](#input-versioning) | `any` | |
-| `website` | [Website](#input-website) | `any` | |
+The module uses your default `aws` provider and creates everything in that provider's Region. To create the bucket somewhere else without configuring another provider, set `region`:
 
-## Inputs (Details)
-| Name | Description | Type | Default |
-|------|-------------|:----:|:-------:|
-| `details.scope` | (Required) Scope Name - What does this object belong to? (Organization Name, Project, etc) | `string` | |
-| `details.scope_abbr` | (Optional) Scope [Abbreviation](#Abbreviations) Override | `string` | |
-| `details.purpose` | (Required) Purpose Name - What is the purpose or function of this object, or what does this object server? | `string` | |
-| `details.purpose_abbr` | (Optional) Purpose [Abbreviation](#Abbreviations) Override | `string` | |
-| `details.environment` | (Required) Environment Name | `string` | |
-| `details.environment_abbr` | (Optional) Environment [Abbreviation](#Abbreviations) Override | `string` | |
-| `details.additional_tags` | (Optional) [Additional Tags](#Additional-Tags) for resources | `map` | `[]` |
+```hcl
+module "s3_bucket_us_west_2" {
+  source  = "AutomateTheCloud/s3_bucket/aws"
+  version = "~> 1.0"
 
-***
-
-### Input - CORS
-- TODO: CORS
-
-### Input - Lifecycle Rules
-- Allows Configuration of multiple distinct Lifecycle Rules
-- Supports: `Transition`, `Expiration`, `Non-Current Version Transition`, `Non-Current Version Expiration`
-- Placeholder Support
-  - When adding rules to cleanup certain resources (like CloudTrail logs), you may need to specify the Account ID or Region. You might not have that information hardcoded somewhere in your Terraform Stack and would prefer to have it figured out for you.
-  - Placeholders:
-    - `[[ACCOUNT_ID]]` => regex replaced with the AWS Account ID
-    - `[[REGION]]` => regex replaced with the AWS Region where the S3 Bucket resides
-- More info:
-  - https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lifecycle-mgmt.html
-  - https://www.terraform.io/docs/providers/aws/r/s3_bucket.html
-- Model:
-```
-[
-  {
-    rule_name                              = <rule_name>
-    enabled                                = <true | false>
-    prefix                                 = <prefix, optional>
-    abort_incomplete_multipart_upload_days = <number, optional>
-    transition = [
-      {
-        days                       = <number>
-        date                       = <date, optional if not specifying days>
-        storage_class              = <STANDARD | STANDARD_IA | ONEZONE_IA | INTELLIGENT_TIERING | GLACIER, | DEEP_ARCHIVE>
-      },
-      {...}
-    ]
-    expiration = {
-      days                         = <number>
-      date                         = <date, optional if not specifying days>
-      expired_object_delete_marker = <true/false>
-    }
-    noncurrent_version_transition = [
-      {
-        days                       = <number>
-        storage_class              = <STANDARD | STANDARD_IA | ONEZONE_IA | INTELLIGENT_TIERING | GLACIER, | DEEP_ARCHIVE>
-      },
-      {...}
-    ]
-    noncurrent_version_expiration = {
-      days                         = <number>
-    }
-  },
-  {...}
-]
-```
-
-- Full Example:
-```
-[
-    {
-      rule_name                                  = "Cleanup (General)"
-      enabled                                    = true
-      abort_incomplete_multipart_upload_days     = 7
-    },
-    {
-      rule_name                                  = "Cleanup (CloudTrail)"
-      enabled                                    = true
-      prefix                                     = "AWSLogs/[[ACCOUNT_ID]]/CloudTrail/"
-      abort_incomplete_multipart_upload_days     = 1
-      expiration                                 = { days = 365 }
-      noncurrent_version_expiration              = { days = 90 }
-    },
-    {
-      rule_name                                  = "Cleanup (CloudTrail-Digest)"
-      enabled                                    = true
-      prefix                                     = "AWSLogs/[[ACCOUNT_ID]]/CloudTrail-Digest/"
-      abort_incomplete_multipart_upload_days     = 1
-      expiration                                 = { days = 365 }
-      noncurrent_version_expiration              = { days = 90 }
-    },
-    {
-      rule_name                                  = "Cleanup (With all the Options)"
-      enabled                                    = true
-      prefix                                     = "with/all/the/options/"
-      abort_incomplete_multipart_upload_days     = 7
-      transition = [
-        { days = 30, storage_class = "STANDARD_IA" },
-        { days = 60, storage_class = "GLACIER" }
-      ]
-      expiration = { days = 365 }
-      noncurrent_version_transition = [
-        { days = 30, storage_class = "STANDARD_IA" },
-        { days = 60, storage_class = "GLACIER" }
-      ]
-      noncurrent_version_expiration = { days = 365 }
-    }
-  ]
-```
-
-### Input - Logging
-- TODO: Logging
-
-### Input - Policy
-- TODO: Policy
-
-### Input - Public Settings
-- TODO: Public Settings Block
-
-### Input - Public Access Block
-- TODO: Public Access Block
-
-### Input - Server-Side Encryption
-- TODO: Server-Side Encryption
-
-### Input - Versioning
-- TODO: Versioning
-
-### Input - Website
-- TODO: Website
-
-***
-
-## Outputs
-All outputs from this module are mapped to a single output named `metadata` to make it easier to capture all of the relevant metadata that would be useful when referenced by other stacks (requires only a single output reference in your code, instead of dozens, if not hundreds!)
-
-| Name | Description |
-|:-----|:------------|
-| `details.scope.name` | Scope name |
-| `details.scope.abbr` | Scope abbreviation |
-| `details.scope.machine` | Scope machine-friendly abbreviation |
-| `details.purpose.name` | Purpose name |
-| `details.purpose.abbr` | Purpose abbreviation |
-| `details.purpose.machine` | Purpose machine-friendly abbreviation |
-| `details.environment.name` | Environment name |
-| `details.environment.abbr` | Environment abbreviation |
-| `details.environment.machine` | Environment machine-friendly abbreviation |
-| `details.tags` | Map of tags applied to all resources |
-| `aws.account.id` | AWS Account ID |
-| `aws.region.name` | AWS Region name, example: `us-east-1` |
-| `aws.region.abbr` | AWS Region four letter abbreviation, example: `use1` |
-| `aws.region.description` | AWS Region description, example: `US East (N. Virginia)` |
-| `s3_bucket` | S3 Bucket |
-| `s3_bucket_accelerate_configuration` | S3 Bucket - Accelerate Configuration |
-| `s3_bucket_acl` | S3 Bucket - ACL |
-| `s3_bucket_cors_configuration` | S3 Bucket - CORS Configuration |
-| `s3_bucket_lifecycle_configuration` | S3 Bucket - Lifecycle Configuration |
-| `s3_bucket_logging` | S3 Bucket - Logging |
-| `s3_bucket_policy` | S3 Bucket - Policy |
-| `s3_bucket_public_access_block` | S3 Bucket - Public Access Block |
-| `s3_bucket_server_side_encryption_configuration` | S3 Bucket - Server-side Encryption Configuration |
-| `s3_bucket_versioning` | S3 Bucket - Versioning |
-| `s3_bucket_website_configuration` | S3 Bucket - Website Configuration |
-
-***
-
-## Notes
-
-### Abbreviations
-* When generating resource names, the module converts each identifier to a more 'machine-friendly' abbreviated format, removing all special characters, replacing spaces with underscores (_), and converting to lowercase. Example: 'Demo - Module' => 'demo_module'
-* Not all resource names allow underscores. When those are encountered, the detail identifier will have the underscore removed (test_example => testexample) automatically. This machine-friendly abbreviation is referred to as 'machine' within the module.
-* The abbreviations can be overridden by suppling the abbreviated names (ie: scope_abbr). This is useful when you have a long name and need the created resource names to be shorter. Some resources in AWS have shorter name constraints than others, or you may just prefer it shorter. NOTE: If specifying the Abbreviation, be sure to follow the convention of no spaces and no special characters (except for underscore), otherwise resoure creation may fail.
-
-### Additional Tags
-* You can specify additional tags for resources by adding to the `details.additional_tags` map.
-```
-additional_tags = {
-  "Example"         = "Extra Tag"
-  "Project"         = "Project Name"
-  "CostCenter"      = "123456"
+  region  = "us-west-2"
+  details = { scope = "Automate the Cloud", purpose = "Backups", environment = "Production" }
+  name    = "example-backups-us-west-2"
 }
 ```
 
-### KMS - Warning
-I do not recommend enabling KMS on All-Purpose Generic Log Buckets (ie: for things like S3 Logs, ELB Logs, Flow Logs, etc). Not every AWS service plays nice with Log Delivery when KMS is enabled on the S3 Bucket. In fact, S3 Access logs can not be shipped to a destination bucket which is using KMS (AES256 works).
+Because `region` is an ordinary input, one module block can create a bucket in each of several Regions with `for_each`.
 
-This option is great for buckets designed to capture CloudTrail logs though! CloudTrail Logs, according to the CIS Benchmarks really shouldnt be collected in your All-Purpose Log bucket anyway, as they want you to Log the S3 Delivery of the Trail to S3, which you cant do in the same bucket (well, you can, but it creates an infinite loop of log delivery, which is very, very bad)
+To use a provider configured for another account, pass it explicitly with `providers = { aws = aws.other_account }`.
 
-### Logging Bucket - Warning
-If the bucket you are creating will be used to store S3 action logs from other buckets, **DO NOT** configure this bucket to write logs somewhere else. Just think about it - for example, you set up 2 different log buckets and want to log S3 actions for each of those buckets. You decide to send the S3 action logs to each of the buckets. Writing an S3 action log to an S3 Bucket is a PUT action, and will be logged. This WILL create an infinite loop (*Well, almost infinite. Your credit card will max out at some point, which I suppose would stop the process when you get the bill*)
+## The `details` input
 
-***
+Most modules ask only for what the resource itself needs. This one also requires `details`: three names that say what the bucket belongs to, what it is for, and which environment it is in. Every Automate the Cloud module takes the same input, and requiring it is deliberate.
 
-## Terraform Versions
-Terraform ~> 1.11.0 is supported.
+```hcl
+details = {
+  scope       = "Automate the Cloud" # what it belongs to: an organization, team or project
+  purpose     = "Web Site"           # what it is for
+  environment = "Production"         # which environment
+}
+```
 
-## Provider Versions
-| Name | Version |
-|------|---------|
-| aws | `~> 5.93` |
+**Every resource can be traced.** The three names become the `Scope`, `Purpose` and `Environment` tags on every resource the module creates. Months later, anyone looking at a bucket in the AWS console, or at a line on the bill, can see who it belongs to and why it exists. With cost allocation tags turned on in AWS Billing, the same tags split your bill by project and environment. Because the input is required and checked, no resource can be created without them.
+
+**One definition for a whole stack.** Write `details` once and pass the same value to every module, so the bucket, its certificate, its DNS zone and everything else are tagged alike. Tags you want everywhere, such as a cost center or the Terraform workspace, go in `additional_tags`:
+
+```hcl
+locals {
+  details = {
+    scope           = "Automate the Cloud"
+    purpose         = "Web Site"
+    environment     = "Production"
+    additional_tags = { CostCenter = "1234", IaC = "true" }
+  }
+}
+
+module "site_bucket" {
+  source  = "AutomateTheCloud/s3_bucket/aws"
+  version = "~> 1.0"
+
+  details = local.details
+  name    = "example-web-site-production"
+}
+```
+
+**Consistent names.** The module turns each name into two short forms other resources can be named with: `abbr`, lowercase with words joined by underscores (`Web Site` becomes `web_site`), and `machine`, lowercase letters and numbers only (`website`), for resources that allow no underscores. It also works out a short form of the Region, such as `use1` for `us-east-1`. Every module derives these the same way, so names stay consistent across a stack. To choose your own short forms, set `scope_abbr`, `purpose_abbr` or `environment_abbr`, for example `environment_abbr = "prd"`.
+
+**One output to reach everything.** All of it comes back in the `metadata` output, along with everything the module created, so a configuration needs only one reference: `module.site_bucket.metadata.s3_bucket.arn` for the bucket's ARN, or `module.site_bucket.metadata.aws.region.abbr` for the Region's short form.
+
+## Examples
+
+Each example is a complete configuration you can run with `terraform init` and `terraform apply`.
+
+- [Basic bucket](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/tree/main/examples/basic): a private, versioned bucket that cleans up old versions.
+- [Static website](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/tree/main/examples/static-website): a public website served directly from S3.
+- [Log bucket](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/tree/main/examples/log-bucket): a bucket that AWS services deliver logs to, and a bucket that sends its access logs there.
+- [Complete](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/tree/main/examples/complete): most of the module's options in one private bucket.
+
+## Things to know
+
+### Letting AWS services deliver logs
+
+The module has no "log bucket" setting. A log bucket is an ordinary bucket whose policy lets particular AWS services write to it, and which services, accounts and key prefixes to allow depends on what you are collecting. Write those grants yourself and pass them in `policy.source_policy_documents`. The [log bucket example](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/tree/main/examples/log-bucket) shows grants for S3 access logs and Elastic Load Balancing, each limited to one account and one prefix.
+
+Several services, including Elastic Load Balancing and Amazon Redshift, can deliver logs only to buckets encrypted with SSE-S3, the default.
+
+Do not send a bucket's access logs to itself, or set two buckets to log to each other. Each log delivery is a request that is logged in turn, so the logs never stop growing.
+
+### Public buckets and websites
+
+Turning on `website` does not make the bucket public. Serving a website straight from S3 takes three settings together: `website`, `policy.public_read`, and a `public_access_block` that allows public policies. The [static website example](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/tree/main/examples/static-website) shows all three. S3 website endpoints serve HTTP only; for HTTPS, put CloudFront in front of the bucket and keep the bucket private.
+
+An account-level Public Access Block, if your account has one, overrides the bucket's settings, and a public policy is rejected.
+
+### Object Lock
+
+Object Lock stops objects from being deleted or overwritten during a retention period. It needs versioning, and it can be turned on for an existing bucket but never turned off. In `COMPLIANCE` mode, nobody can shorten a retention period or delete a locked object before it expires, including the account's root user. Try `GOVERNANCE` mode first.
+
+### Encryption keys
+
+To use your own AWS Key Management Service (KMS) key, pass its ARN in `server_side_encryption.kms_key_id`, not a key ID or alias name. S3 looks up a bare key ID or alias in the account of whoever writes the object, which is not always the bucket owner.
+
+## Contributing
+
+Contributions are welcome, after review. Read [CONTRIBUTING.md](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/blob/main/CONTRIBUTING.md) before opening a pull request, and report security problems as described in [SECURITY.md](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/blob/main/SECURITY.md).
+
+## Testing
+
+The tests in `tests/` run offline against mocked AWS providers, so they need no AWS account:
+
+```shell
+terraform init
+terraform test
+```
+
+## Reference
+
+The sections below are generated from the code by [terraform-docs](https://terraform-docs.io). To update them, run `terraform-docs .`.
+
+<!-- BEGIN_TF_DOCS -->
+### Requirements
+
+The following requirements are needed by this module:
+
+- <a name="requirement_terraform"></a> [terraform](#requirement_terraform) (>= 1.9)
+
+- <a name="requirement_aws"></a> [aws](#requirement_aws) (>= 6.0)
+
+### Required Inputs
+
+The following input variables are required:
+
+#### <a name="input_details"></a> [details](#input_details)
+
+Description: Names and tags shared by every resource in the module. `scope`, `purpose` and `environment` become the `Scope`, `Purpose` and `Environment` tags, and are converted to abbreviations that other modules can use in resource names (see the `metadata` output). [The `details` input](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket#the-details-input) explains why it is required.
+
+- `scope` - (Required) What the resource belongs to, such as an organization or project: `Automate the Cloud`.
+- `purpose` - (Required) What the resource is for: `Web Site`.
+- `environment` - (Required) The environment: `Production`.
+- `scope_abbr`, `purpose_abbr`, `environment_abbr` - (Optional) Abbreviations to use instead of the generated ones, which are lowercase with words joined by underscores (`Web Site` becomes `web_site`).
+- `additional_tags` - (Optional) More tags for every resource, such as `{ CostCenter = "1234" }`.
+
+Type:
+
+```hcl
+object({
+    scope            = string
+    scope_abbr       = optional(string)
+    purpose          = string
+    purpose_abbr     = optional(string)
+    environment      = string
+    environment_abbr = optional(string)
+    additional_tags  = optional(map(string), {})
+  })
+```
+
+#### <a name="input_name"></a> [name](#input_name)
+
+Description: The name of the bucket. Bucket names are global across all AWS accounts: 3 to 63 characters of lowercase letters, numbers, periods and hyphens, beginning and ending with a letter or number.
+
+Type: `string`
+
+### Optional Inputs
+
+The following input variables are optional (have default values):
+
+#### <a name="input_cors"></a> [cors](#input_cors)
+
+Description: Cross-Origin Resource Sharing (CORS) rules, which let web pages on other domains request objects from the bucket. An empty list creates no CORS configuration.
+
+Each rule takes:
+
+- `allowed_methods` - (Required) HTTP methods to allow: `GET`, `PUT`, `HEAD`, `POST` or `DELETE`.
+- `allowed_origins` - (Required) Origins to allow, such as `https://example.org`, or `*` for any origin.
+- `allowed_headers` - (Optional) Request headers to allow.
+- `expose_headers` - (Optional) Response headers that browsers may read.
+- `max_age_seconds` - (Optional) How long browsers may cache the preflight response.
+
+Type:
+
+```hcl
+list(object({
+    allowed_headers = optional(list(string))
+    allowed_methods = list(string)
+    allowed_origins = list(string)
+    expose_headers  = optional(list(string))
+    max_age_seconds = optional(number)
+  }))
+```
+
+Default: `[]`
+
+#### <a name="input_enable_transfer_acceleration"></a> [enable_transfer_acceleration](#input_enable_transfer_acceleration)
+
+Description: Turn on S3 Transfer Acceleration, which routes uploads and downloads through CloudFront edge locations. It is billed per GB transferred, and bucket names containing periods cannot use it.
+
+Type: `bool`
+
+Default: `false`
+
+#### <a name="input_force_destroy"></a> [force_destroy](#input_force_destroy)
+
+Description: Delete every object, including locked objects and old versions, when the bucket is destroyed. Without it, Terraform cannot destroy a bucket that still holds objects. Deleted objects cannot be recovered.
+
+Type: `bool`
+
+Default: `false`
+
+#### <a name="input_lifecycle_rules"></a> [lifecycle_rules](#input_lifecycle_rules)
+
+Description: Lifecycle rules, which expire objects or move them to cheaper storage classes over time. An empty list creates no lifecycle configuration.
+
+Each rule takes:
+
+- `rule_name` - (Required) A unique name for the rule.
+- `enabled` - (Required) Whether the rule is applied.
+- `prefix` - (Optional) Apply the rule only to keys that start with this prefix. `[[ACCOUNT_ID]]` and `[[REGION]]` are replaced with the bucket's account ID and Region, for log paths such as `AWSLogs/[[ACCOUNT_ID]]/CloudTrail/[[REGION]]/`. With no prefix and no size filter, the rule applies to the whole bucket.
+- `object_size_greater_than`, `object_size_less_than` - (Optional) Apply the rule only to objects in this size range, in bytes.
+- `abort_incomplete_multipart_upload_days` - (Optional) Delete the parts of uploads that were never completed, this many days after they started.
+- `expiration` - (Optional) Delete current objects: `days` after creation or on a `date` (`YYYY-MM-DD`), or set `expired_object_delete_marker = true` to remove delete markers with no versions behind them.
+- `transition` - (Optional) A list of moves to another storage class, each with `storage_class` and either `days` or `date`.
+- `noncurrent_version_expiration` - (Optional) Delete old versions `days` after they stop being current, keeping the newest `newer_noncurrent_versions` of them.
+- `noncurrent_version_transition` - (Optional) A list of moves of old versions to another storage class, each with `days`, `storage_class` and optional `newer_noncurrent_versions`.
+
+Type:
+
+```hcl
+list(object({
+    rule_name                              = string
+    enabled                                = bool
+    prefix                                 = optional(string)
+    object_size_greater_than               = optional(number)
+    object_size_less_than                  = optional(number)
+    abort_incomplete_multipart_upload_days = optional(number)
+    expiration = optional(object({
+      days                         = optional(number)
+      date                         = optional(string)
+      expired_object_delete_marker = optional(bool)
+    }))
+    transition = optional(list(object({
+      days          = optional(number)
+      date          = optional(string)
+      storage_class = string
+    })), [])
+    noncurrent_version_expiration = optional(object({
+      days                      = number
+      newer_noncurrent_versions = optional(number)
+    }))
+    noncurrent_version_transition = optional(list(object({
+      days                      = number
+      storage_class             = string
+      newer_noncurrent_versions = optional(number)
+    })), [])
+  }))
+```
+
+Default: `[]`
+
+#### <a name="input_logging"></a> [logging](#input_logging)
+
+Description: Server access logging: where this bucket sends a record of each request made to it. `null`, the default, turns logging off.
+
+- `bucket_name` - (Required) The bucket that receives the logs. It must be in the same Region and account, and its policy must let `logging.s3.amazonaws.com` write to it. See the [log bucket example](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/tree/main/examples/log-bucket).
+- `prefix` - (Optional) Key prefix for the logs, without a trailing slash. Defaults to `s3`.
+- `partition_date_source` - (Optional) Which date partitions the log keys: `EventTime` (the default) or `DeliveryTime`.
+
+Do not send a bucket's logs to itself. Each log delivery is itself a request that gets logged, so the logs never stop growing.
+
+Type:
+
+```hcl
+object({
+    bucket_name           = string
+    prefix                = optional(string)
+    partition_date_source = optional(string, "EventTime")
+  })
+```
+
+Default: `null`
+
+#### <a name="input_object_lock"></a> [object_lock](#input_object_lock)
+
+Description: S3 Object Lock, which stops objects from being deleted or overwritten for a retention period. `null`, the default, leaves it off.
+
+Object Lock requires `versioning = { enabled = true }`. It can be turned on for an existing bucket, but never turned off: removing `object_lock` later only removes the default retention.
+
+- `enabled` - (Optional) Defaults to `true` when `object_lock` is set.
+- `mode` - (Optional) `GOVERNANCE` (the default), which users with special permission can override, or `COMPLIANCE`, which nobody can override, including the account's root user.
+- `days` or `years` - (Optional) Default retention for new objects. Set one, not both. Leave both unset to lock only the objects you give a retention period.
+
+Type:
+
+```hcl
+object({
+    enabled = optional(bool, true)
+    mode    = optional(string, "GOVERNANCE")
+    days    = optional(number)
+    years   = optional(number)
+  })
+```
+
+Default: `null`
+
+#### <a name="input_policy"></a> [policy](#input_policy)
+
+Description: The bucket policy. A policy is created when any option below grants or denies access. The default creates one with only the encrypted-transport rule.
+
+- `require_encrypted_transport` - (Optional) Deny every request not made over HTTPS. Defaults to `true`.
+- `public_read` - (Optional) Let anyone on the internet read every object. Defaults to `false`. Requires `public_access_block` to allow public policies; see the [static website example](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/tree/main/examples/static-website).
+- `aws_account_read_access` - (Optional) 12-digit AWS account IDs that may list the bucket and read its objects.
+- `aws_account_write_access` - (Optional) 12-digit AWS account IDs that may also write and delete objects and manage the bucket policy.
+- `aws_organization_read_access`, `aws_organization_write_access` - (Optional) The same, for every account in an AWS Organization, by organization ID (`o-xxxxxxxxxx`).
+- `source_policy_documents` - (Optional) JSON policy documents whose statements are added to the policy, for anything the options above do not cover, such as letting AWS services deliver logs. Statement IDs (`Sid`) must be unique across the whole policy. See the [log bucket example](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/tree/main/examples/log-bucket).
+
+Type:
+
+```hcl
+object({
+    require_encrypted_transport   = optional(bool, true)
+    public_read                   = optional(bool, false)
+    aws_account_read_access       = optional(list(string), [])
+    aws_account_write_access      = optional(list(string), [])
+    aws_organization_read_access  = optional(list(string), [])
+    aws_organization_write_access = optional(list(string), [])
+    source_policy_documents       = optional(list(string), [])
+  })
+```
+
+Default: `{}`
+
+#### <a name="input_public_access_block"></a> [public_access_block](#input_public_access_block)
+
+Description: The bucket's Public Access Block settings. Everything is blocked by default, which is right for almost every bucket.
+
+- `block_public_acls` - (Optional) Reject requests that add public ACLs. Defaults to `true`.
+- `block_public_policy` - (Optional) Reject bucket policies that grant public access. Defaults to `true`.
+- `ignore_public_acls` - (Optional) Ignore public ACLs already present. Defaults to `true`.
+- `restrict_public_buckets` - (Optional) Limit access under a public policy to AWS services and the bucket owner's account. Defaults to `true`.
+
+An account-level Public Access Block, if the account has one, overrides these settings.
+
+Type:
+
+```hcl
+object({
+    block_public_acls       = optional(bool, true)
+    block_public_policy     = optional(bool, true)
+    ignore_public_acls      = optional(bool, true)
+    restrict_public_buckets = optional(bool, true)
+  })
+```
+
+Default: `{}`
+
+#### <a name="input_region"></a> [region](#input_region)
+
+Description: The AWS Region to create the bucket and its configuration in, such as `us-west-2`. Defaults to the Region of the AWS provider passed to the module.
+
+Type: `string`
+
+Default: `null`
+
+#### <a name="input_requester_pays"></a> [requester_pays](#input_requester_pays)
+
+Description: Make the requester, not the bucket owner, pay for requests and data transfer. Anonymous requests are then rejected.
+
+Type: `bool`
+
+Default: `false`
+
+#### <a name="input_s3_bucket_additional_tags"></a> [s3_bucket_additional_tags](#input_s3_bucket_additional_tags)
+
+Description: Tags applied to the bucket only. Tags for every resource go in `details.additional_tags`.
+
+Type: `map(string)`
+
+Default: `{}`
+
+#### <a name="input_server_side_encryption"></a> [server_side_encryption](#input_server_side_encryption)
+
+Description: Default encryption for new objects. Without changes, objects are encrypted with keys S3 manages (SSE-S3, `AES256`).
+
+- `kms_enabled` - (Optional) Encrypt with AWS Key Management Service (SSE-KMS) instead. Defaults to `false`.
+- `kms_key_id` - (Optional) ARN of the KMS key or alias to use. Requires `kms_enabled`. Without it, S3 uses the AWS managed key `aws/s3`. Use an ARN: S3 looks up a bare key ID or alias name in the account of whoever writes the object, not the bucket owner's.
+- `bucket_key_enabled` - (Optional) Use an S3 Bucket Key, which cuts KMS request costs. Applies only with `kms_enabled`. Defaults to `false`.
+
+Several AWS services, including Elastic Load Balancing and Amazon Redshift, can deliver logs only to buckets that use SSE-S3.
+
+Type:
+
+```hcl
+object({
+    kms_enabled        = optional(bool, false)
+    kms_key_id         = optional(string)
+    bucket_key_enabled = optional(bool, false)
+  })
+```
+
+Default: `{}`
+
+#### <a name="input_versioning"></a> [versioning](#input_versioning)
+
+Description: Versioning, which keeps every version of every object so that overwritten and deleted objects can be recovered.
+
+- `enabled` - (Optional) Defaults to `false`, which sets versioning to `Suspended`. Once a bucket has had versioning enabled, it can be suspended but never fully turned off.
+
+Pair versioning with a `noncurrent_version_expiration` lifecycle rule, or old versions are kept, and billed, forever.
+
+Type:
+
+```hcl
+object({
+    enabled = optional(bool, false)
+  })
+```
+
+Default: `{}`
+
+#### <a name="input_website"></a> [website](#input_website)
+
+Description: Static website hosting. `null`, the default, leaves it off. Set exactly one of `index_document` or `redirect_all_requests_to`.
+
+Hosting a website does not make the bucket public. To serve it directly from S3, also set `policy.public_read`. For production sites, serving through CloudFront keeps the bucket private.
+
+- `enabled` - (Optional) Defaults to `true` when `website` is set.
+- `index_document` - The page returned for requests to a directory, such as `index.html`.
+- `error_document` - (Optional) The page returned for errors, such as `404.html`.
+- `redirect_all_requests_to` - Redirect every request to `host_name`, with an optional `protocol` (`http` or `https`).
+- `routing_rules` - (Optional) A list of redirect rules. Each has an optional `condition` (`key_prefix_equals`, `http_error_code_returned_equals`) and a `redirect` (`host_name`, `http_redirect_code`, `protocol`, `replace_key_prefix_with`, `replace_key_with`).
+
+Type:
+
+```hcl
+object({
+    enabled        = optional(bool, true)
+    index_document = optional(string)
+    error_document = optional(string)
+    redirect_all_requests_to = optional(object({
+      host_name = string
+      protocol  = optional(string)
+    }))
+    routing_rules = optional(list(object({
+      condition = optional(object({
+        http_error_code_returned_equals = optional(string)
+        key_prefix_equals               = optional(string)
+      }))
+      redirect = object({
+        host_name               = optional(string)
+        http_redirect_code      = optional(string)
+        protocol                = optional(string)
+        replace_key_prefix_with = optional(string)
+        replace_key_with        = optional(string)
+      })
+    })), [])
+  })
+```
+
+Default: `null`
+
+### Outputs
+
+The following outputs are exported:
+
+#### <a name="output_metadata"></a> [metadata](#output_metadata)
+
+Description: Everything the module created, in one object, so that other configurations need only one reference:
+
+- `details` - The scope, purpose and environment, each with its `name`, `abbr` (lowercase, words joined by underscores) and `machine` (lowercase letters and numbers only) forms, and the `tags` applied to every resource.
+- `aws` - The `account.id`, and the `region` `name`, `abbr` (such as `use1` for `us-east-1`) and `description`.
+- `s3_bucket` - The bucket's `id` (its name), `arn`, `bucket_regional_domain_name`, `bucket_domain_name`, `bucket_region`, `hosted_zone_id`, `region`, `force_destroy`, `tags` and `tags_all`.
+- One entry per configuration resource, such as `s3_bucket_policy` and `s3_bucket_website_configuration`. An entry is `null` when that resource is not created.
+<!-- END_TF_DOCS -->
+
+## License
+
+This module is licensed under the [Apache License 2.0](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/blob/main/LICENSE). See [NOTICE](https://github.com/AutomateTheCloud/terraform-aws-s3_bucket/blob/main/NOTICE) for the copyright notice.
+
+The Automate the Cloud name and logo are not covered by this license.
+
+---
+
+Maintained by [Automate the Cloud](https://automatethe.cloud), a Kentucky 501(c)(3) that teaches cloud infrastructure and helps nonprofits run theirs.

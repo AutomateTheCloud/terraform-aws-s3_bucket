@@ -1,8 +1,10 @@
+# Copyright 2025 Automate the Cloud Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
+  region = var.region
   versioning_configuration {
-    status     = try(var.versioning.enabled, false) ? "Enabled" : "Suspended"
-    mfa_delete = try(var.versioning.mfa_delete, false) ? "Enabled" : null
+    status = var.versioning.enabled ? "Enabled" : "Suspended"
   }
-  provider = aws.this
 }
