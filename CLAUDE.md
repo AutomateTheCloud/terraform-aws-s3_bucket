@@ -149,3 +149,14 @@ ownership, third-party material, or personal information in files or history.
   it iterates over.
 - New deprecations appear first on the newest Terraform and provider. Run
   `terraform validate` there before every release.
+- `x != null` on a value from a resource created in the same run is unknown
+  at plan, so it cannot decide `count` or `for_each`. Take such a value inside
+  an object input (`{ zone_id = ... }`): whether the object is `null` is known.
+- When a resource is replaced, its computed attributes are unknown at plan.
+  Resources built from them are replaced too, if those arguments force
+  replacement, and are destroyed before the new resource exists, even with
+  `create_before_destroy`. If the values cannot change, use `ignore_changes`.
+- `terraform validate` fails on a module that declares
+  `configuration_aliases`. CI writes a non-empty provider block for each alias
+  (an empty one is a deprecated proxy block) and runs `validate -no-tests`,
+  because test fixtures that pass the alias in clash with that block.
